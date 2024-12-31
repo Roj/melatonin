@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from scipy.fft import fft, fftfreq
+import scipy.fft
 import numpy as np
 import scipy
 from matplotlib import pyplot as plt
@@ -73,7 +73,8 @@ class Detector:
                 )
         # [Since slice_size = 2048 then the FFT is also 2048]
         self.mic_fft_slices = [
-            [fft(_slice) for _slice in slices] for slices in self.mic_time_slices
+            [scipy.fft.rfft(_slice) for _slice in slices]
+            for slices in self.mic_time_slices
         ]
 
         # We then define a “constant-time analysis zone”, (t, Ω), as a
@@ -81,7 +82,9 @@ class Detector:
         # analysis zone”, (t, Ω) is thus referred to a specific time frame t
         # and is comprised by Ω adjacent frequency components.
 
-        self.freq_bins = fftfreq(self.parameters.slice_size, 1 / self.parameters.fs)
+        self.freq_bins = scipy.fft.rfftfreq(
+            self.parameters.slice_size, 1 / self.parameters.fs
+        )
         if self.parameters.verbose:
             print(
                 f"Single source analysis zone is {self.freq_bins[self.parameters.adjacent_zone+1] - self.freq_bins[1]:.2f}Hz"
