@@ -93,18 +93,29 @@ class Detector:
         # Choosing the important frequencies
         # The paper selects w_i_max for each microphone pair for each single source zone.
         self.doa_zone_estimations = []
+        self.frequencies_of_interest = []
         for t in range(t_from, t_to):
             for zone in range(50):
                 if not self.is_single_source_zone(zone, t, self.mic_fft_slices):
                     continue
+
                 top_frequency_indices = self.d_highest_peaks(
                     zone * self.parameters.adjacent_zone,
                     (zone + 1) * self.parameters.adjacent_zone,
                     timestep=t,
-                    d=self.parameters.D,
+                    d=self.parameters.D,  # TODO: move this to function?
                     mic_fft_slices=self.mic_fft_slices,
                 )
+
                 for frequency_index in top_frequency_indices:
+                    # TODO: checkme - to avoid spurious DoA estimations
+                    if np.abs(self.mic_fft_slices[1][t][frequency_index]) < 100:
+                        continue
+                    print(
+                        f"Using frequency {self.freq_bins[frequency_index]} in zone #{zone}"
+                    )
+                    self.frequencies_of_interest.append(self.freq_bins[frequency_index])
+                    # print(f"Value: {np.abs(self.mic_fft_slices[1][t][frequency_index])}")
                     # for single source zone, detect DoA
                     result = scipy.optimize.minimize_scalar(
                         self.negative_cics,
