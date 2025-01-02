@@ -15,7 +15,6 @@ logging.basicConfig(
 log = logging.getLogger("detector")
 
 
-
 @dataclass
 class Parameters:
     microphone_positions: np.ndarray
@@ -125,7 +124,9 @@ class Detector:
                         f"Using frequency {self.freq_bins[frequency_index]} in zone #{zone}"
                     )
                     self.frequencies_of_interest.append(self.freq_bins[frequency_index])
-                    logging.debug(f"Value: {np.abs(self.mic_fft_slices[1][t][frequency_index])}")
+                    logging.debug(
+                        f"Value: {np.abs(self.mic_fft_slices[1][t][frequency_index])}"
+                    )
                     # for single source zone, detect DoA
                     result = scipy.optimize.minimize_scalar(
                         self.negative_cics,
@@ -187,7 +188,15 @@ class Detector:
             ord=1,
         )
 
-    def cross_correlation(self, mic1: int, mic2: int, timestep: int, f_from: int, f_to: int, mic_fft_slices: list):
+    def cross_correlation(
+        self,
+        mic1: int,
+        mic2: int,
+        timestep: int,
+        f_from: int,
+        f_to: int,
+        mic_fft_slices: list,
+    ):
         # Cross correlation
         corr = self.correlation(mic1, mic2, timestep, f_from, f_to, mic_fft_slices)
 
@@ -212,7 +221,9 @@ class Detector:
         )
         return correlation_coefficient
 
-    def is_single_source_zone(self, zone_index: int, timestep:int, mic_fft_slices: list):
+    def is_single_source_zone(
+        self, zone_index: int, timestep: int, mic_fft_slices: list
+    ):
         avg = 0
         omega_index = self.parameters.adjacent_zone * zone_index
         for i in range(1, self.parameters.num_mics):
@@ -231,7 +242,14 @@ class Detector:
             )
         return avg >= self.parameters.single_source_threshold
 
-    def negative_cics(self, phi: float, omega_index: int, t:int, mic_fft_slices:list, freq_bins:typing.Sequence):
+    def negative_cics(
+        self,
+        phi: float,
+        omega_index: int,
+        t: int,
+        mic_fft_slices: list,
+        freq_bins: typing.Sequence,
+    ):
         """Negative Circular Integrated Cross Spectrum"""
         value = 0
         omega = freq_bins[omega_index]
@@ -312,7 +330,11 @@ class Detector:
     def atom_detection_histogram(self):
         """Plot DoA histogram and atom (sound source) estimation"""
         plt.figure(dpi=150, facecolor="white", figsize=(5, 3))
-        plt.plot(np.arange(self.parameters.histogram_bins), self.bins, label="Original histogram")
+        plt.plot(
+            np.arange(self.parameters.histogram_bins),
+            self.bins,
+            label="Original histogram",
+        )
         for j, atom_contribution in enumerate(self.atom_contributions):
             plt.plot(
                 np.arange(self.parameters.histogram_bins),
