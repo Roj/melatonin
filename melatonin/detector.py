@@ -79,7 +79,6 @@ class Detector:
             # This way each chunk is of slice_size length, but there is overlap_size
             # shared between successive chunks
             while stop < len(signal):
-                print(start, stop)
                 self.mic_time_slices[mic_i].append(signal[start:stop])
                 start += self.parameters.slice_size - self.parameters.overlap_size
                 stop = start + self.parameters.slice_size
