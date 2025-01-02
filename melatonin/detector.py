@@ -1,21 +1,31 @@
 from dataclasses import dataclass
+import typing
 import scipy.fft
 import numpy as np
 import scipy
 from matplotlib import pyplot as plt
+import logging
+from rich.logging import RichHandler
+
+FORMAT = "%(message)s"
+logging.basicConfig(
+    level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler()]
+)
+
+log = logging.getLogger("detector")
+
 
 
 @dataclass
 class Parameters:
     microphone_positions: np.ndarray
     slice_size: int = 2048
-    fs: int = 44100
+    sampling_frequency: int = 44100
     adjacent_zone: int = 2
     single_source_threshold: float = 0.8
     speed_of_sound: int = 1
-    # t = 10
-    D: int = 4  # detection
-    L: int = 50  # histogram length
+    estimations_per_zone: int = 4  # aka "D" in the paper
+    histogram_bins: int = 50  # aka "L" in the paper
     Q0: int = 5  # blackman window peak
     max_sources: int = 10
     verbose: bool = False
@@ -29,12 +39,12 @@ class Parameters:
         return 2 * self.Q0 + 1
 
     @property
-    def N_mics(self):
+    def num_mics(self):
         return self.microphone_positions.shape[0]
 
     @property
     def angle_rotation(self):
-        return np.pi * 2 / self.N_mics
+        return np.pi * 2 / self.num_mics
 
     @property
     def A(self):
@@ -57,9 +67,8 @@ class Detector:
         self.mic_signals = mic_signals
         self.mic_time_slices = []
 
-    def detect(self, t_from, t_to):
+    def detect(self, t_from: int, t_to: int):
         self.mic_time_slices = []
-
         for mic_i, signal in enumerate(self.mic_signals):
             self.mic_time_slices.append(list())
             for j in range(len(signal) // self.parameters.slice_size):
@@ -71,7 +80,6 @@ class Detector:
                         - overlapping_mask
                     ]
                 )
-        # [Since slice_size = 2048 then the FFT is also 2048]
         self.mic_fft_slices = [
             [scipy.fft.rfft(_slice) for _slice in slices]
             for slices in self.mic_time_slices
@@ -81,12 +89,11 @@ class Detector:
         # series of frequency-adjacent TF points (t, ω). A “constant-time
         # analysis zone”, (t, Ω) is thus referred to a specific time frame t
         # and is comprised by Ω adjacent frequency components.
-
         self.freq_bins = scipy.fft.rfftfreq(
-            self.parameters.slice_size, 1 / self.parameters.fs
+            self.parameters.slice_size, 1 / self.parameters.sampling_frequency
         )
         if self.parameters.verbose:
-            print(
+            log.info(
                 f"Single source analysis zone is {self.freq_bins[self.parameters.adjacent_zone+1] - self.freq_bins[1]:.2f}Hz"
             )
 
@@ -103,7 +110,7 @@ class Detector:
                     zone * self.parameters.adjacent_zone,
                     (zone + 1) * self.parameters.adjacent_zone,
                     timestep=t,
-                    d=self.parameters.D,  # TODO: move this to function?
+                    d=self.parameters.estimations_per_zone,  # TODO: move this to function?
                     mic_fft_slices=self.mic_fft_slices,
                 )
 
@@ -111,11 +118,11 @@ class Detector:
                     # TODO: checkme - to avoid spurious DoA estimations
                     if np.abs(self.mic_fft_slices[1][t][frequency_index]) < 100:
                         continue
-                    print(
+                    logging.debug(
                         f"Using frequency {self.freq_bins[frequency_index]} in zone #{zone}"
                     )
                     self.frequencies_of_interest.append(self.freq_bins[frequency_index])
-                    # print(f"Value: {np.abs(self.mic_fft_slices[1][t][frequency_index])}")
+                    logging.debug(f"Value: {np.abs(self.mic_fft_slices[1][t][frequency_index])}")
                     # for single source zone, detect DoA
                     result = scipy.optimize.minimize_scalar(
                         self.negative_cics,
@@ -126,16 +133,16 @@ class Detector:
                     self.doa_zone_estimations.append(result.x)
 
         self.bins, self.x = np.histogram(
-            np.array(self.doa_zone_estimations) * 360 / (2 * np.pi),
-            bins=np.linspace(0, 360, self.parameters.L + 1),
+            np.rad2deg(np.array(self.doa_zone_estimations)),
+            bins=np.linspace(0, 360, self.parameters.histogram_bins + 1),
         )
 
         # Source atom detection
         window = scipy.signal.windows.blackman(self.parameters.Q)
-        u = np.zeros(self.parameters.L)
+        u = np.zeros(self.parameters.histogram_bins)
         u[: self.parameters.Q] = window
         c = np.roll(u, -self.parameters.Q0)
-        C = np.array([np.roll(c, k) for k in range(self.parameters.L)])
+        C = np.array([np.roll(c, k) for k in range(self.parameters.histogram_bins)])
 
         current_histogram = self.bins
         self.atoms = []
@@ -161,8 +168,8 @@ class Detector:
         magnitudes = {}
         for freq in range(freq_from, freq_to):
             val = 0
-            for i in range(self.parameters.N_mics):
-                next_mic = (i + 1) % self.parameters.N_mics
+            for i in range(self.parameters.num_mics):
+                next_mic = (i + 1) % self.parameters.num_mics
                 val += np.abs(
                     mic_fft_slices[i][timestep][freq]
                     * np.conj(mic_fft_slices[next_mic][timestep][freq])
@@ -177,7 +184,7 @@ class Detector:
             ord=1,
         )
 
-    def cross_correlation(self, mic1, mic2, timestep, f_from, f_to, mic_fft_slices):
+    def cross_correlation(self, mic1: int, mic2: int, timestep: int, f_from: int, f_to: int, mic_fft_slices: list):
         # Cross correlation
         corr = self.correlation(mic1, mic2, timestep, f_from, f_to, mic_fft_slices)
 
@@ -202,14 +209,14 @@ class Detector:
         )
         return correlation_coefficient
 
-    def is_single_source_zone(self, zone_index, timestep, mic_fft_slices):
+    def is_single_source_zone(self, zone_index: int, timestep:int, mic_fft_slices: list):
         avg = 0
         omega_index = self.parameters.adjacent_zone * zone_index
-        for i in range(1, self.parameters.N_mics):
-            next_mic = (i + 1) % self.parameters.N_mics
+        for i in range(1, self.parameters.num_mics):
+            next_mic = (i + 1) % self.parameters.num_mics
             avg += (
                 1
-                / self.parameters.N_mics
+                / self.parameters.num_mics
                 * self.cross_correlation(
                     i,
                     next_mic,
@@ -221,11 +228,11 @@ class Detector:
             )
         return avg >= self.parameters.single_source_threshold
 
-    def negative_cics(self, phi, omega_index, t, mic_fft_slices, freq_bins):
-        """Circular Integrated Cross Spectrum"""
+    def negative_cics(self, phi: float, omega_index: int, t:int, mic_fft_slices:list, freq_bins:typing.Sequence):
+        """Negative Circular Integrated Cross Spectrum"""
         value = 0
         omega = freq_bins[omega_index]
-        for i in range(self.parameters.N_mics):
+        for i in range(self.parameters.num_mics):
             # +1 because we use zero-index; eqn uses -1
             phase_rotation_factor = np.exp(
                 -1j
@@ -243,7 +250,7 @@ class Detector:
             )
             # What happens in the last microphone?? I'm guessing wrap-around
             cross_power = mic_fft_slices[i][t][omega_index] * np.conj(
-                mic_fft_slices[((i + 1) % self.parameters.N_mics)][t][omega_index]
+                mic_fft_slices[((i + 1) % self.parameters.num_mics)][t][omega_index]
             )
 
             phase_cross_spectrum = cross_power / np.conj(cross_power)
@@ -251,24 +258,26 @@ class Detector:
         return -np.abs(value)
 
     def doa_estimation_histogram(self):
+        """Estimation of DoA histogram with all DoA votes"""
         plt.figure(dpi=150, figsize=(5, 3))
         plt.title(
-            f"Histogram of DOA estimations\nusing {self.parameters.D} frequency components"
+            f"Histogram of DoA estimations\nusing {self.parameters.estimations_per_zone} frequency components"
         )
 
         bins, x, _ = plt.hist(
             np.array(self.doa_zone_estimations) * 360 / (2 * np.pi),
-            bins=np.linspace(0, 360, self.parameters.L + 1),
+            bins=np.linspace(0, 360, self.parameters.histogram_bins + 1),
         )
         plt.xlabel("Direction of Arrival degrees")
         plt.ylabel("# Estimation")
 
     def scatter_doa_estimation(self):
+        """Plot the DoA estimations from all zones"""
         plt.figure()
 
         bins, x = np.histogram(
             np.array(self.doa_zone_estimations) * 360 / (2 * np.pi),
-            bins=np.linspace(0, 360, self.parameters.L + 1),
+            bins=np.linspace(0, 360, self.parameters.histogram_bins + 1),
         )
 
         doa_hist = dict(zip(x, bins))
@@ -283,8 +292,8 @@ class Detector:
         max_value = bins.max()
         for value, freq in doa_hist.items():
             plt.plot(
-                [0, 10 * np.sin(value / 360 * 2 * np.pi - np.pi)],
-                [0, 10 * np.cos(value / 360 * 2 * np.pi - np.pi)],
+                [0, 10 * np.cos(value / 360 * 2 * np.pi)],
+                [0, 10 * np.sin(value / 360 * 2 * np.pi)],
                 alpha=freq / max_value,
                 color="black",
                 linestyle="-.",
@@ -298,11 +307,12 @@ class Detector:
         plt.title("DoA estimation")
 
     def atom_detection_histogram(self):
+        """Plot DoA histogram and atom (sound source) estimation"""
         plt.figure(dpi=150, facecolor="white", figsize=(5, 3))
-        plt.plot(np.arange(self.parameters.L), self.bins, label="Original histogram")
+        plt.plot(np.arange(self.parameters.histogram_bins), self.bins, label="Original histogram")
         for j, atom_contribution in enumerate(self.atom_contributions):
             plt.plot(
-                np.arange(self.parameters.L),
+                np.arange(self.parameters.histogram_bins),
                 atom_contribution,
                 label=f"Est. source #{j}",
             )
@@ -311,6 +321,7 @@ class Detector:
         plt.legend()
 
     def plot_predictions(self):
+        """Plot predicted angle of arrival along with microphone positions"""
         plt.figure(dpi=150, facecolor="white", figsize=(5, 3))
         plt.scatter(
             self.parameters.microphone_positions[:, 0],
@@ -322,8 +333,8 @@ class Detector:
         for atom, energy in zip(self.atoms, self.atom_energies):
             value = self.x[atom]
             plt.plot(
-                [0, 10 * np.sin(value / 360 * 2 * np.pi)],
                 [0, 10 * np.cos(value / 360 * 2 * np.pi)],
+                [0, 10 * np.sin(value / 360 * 2 * np.pi)],
                 color="gray",
                 alpha=energy / max(self.atom_energies),
             )

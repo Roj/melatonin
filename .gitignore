@@ -1,0 +1,9 @@
+*.pdf
+# Sound formats
+*.mp3
+*.wav
+*.mp4
+*.m4a
+# Python ignores
+__pycache__
+*.pyc

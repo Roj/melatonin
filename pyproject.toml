@@ -1,0 +1,19 @@
+[project]
+name = "melatonin"
+version = "0.1.0"
+description = "Implementation of sound source detection for urban sound pollution monitoring at night."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "matplotlib>=3.10.0",
+    "rich>=13.9.4",
+    "ruff>=0.8.5",
+    "scipy>=1.14.1",
+]
+
+[dependency-groups]
+dev = [
+    "black>=24.10.0",
+    "ipykernel>=6.29.5",
+    "mypy>=1.14.1",
+]
