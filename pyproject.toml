@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "matplotlib>=3.10.0",
+    "pyaudio>=0.2.14",
     "rich>=13.9.4",
     "ruff>=0.8.5",
     "scipy>=1.14.1",
