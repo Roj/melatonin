@@ -71,15 +71,19 @@ class Detector:
         self.mic_time_slices = []
         for mic_i, signal in enumerate(self.mic_signals):
             self.mic_time_slices.append(list())
-            for j in range(len(signal) // self.parameters.slice_size):
-                overlapping_mask = self.parameters.overlap_size * (j > 0)
-                self.mic_time_slices[mic_i].append(
-                    signal[
-                        j * self.parameters.slice_size
-                        - overlapping_mask : (j + 1) * self.parameters.slice_size
-                        - overlapping_mask
-                    ]
-                )
+            start, stop = 0, self.parameters.slice_size
+            # Generate windows of the following form:
+            # 0: [0, slice_size]
+            # 1: [slice_size - overlap_size, 2*slice_size - overlap_size]
+            # 2: [2*slice_size - 2*overlap_size, 3*slice_size - 2*overlap_size]
+            # This way each chunk is of slice_size length, but there is overlap_size
+            # shared between successive chunks
+            while stop < len(signal):
+                print(start, stop)
+                self.mic_time_slices[mic_i].append(signal[start:stop])
+                start += self.parameters.slice_size - self.parameters.overlap_size
+                stop = start + self.parameters.slice_size
+
         self.mic_fft_slices = [
             [scipy.fft.rfft(_slice) for _slice in slices]
             for slices in self.mic_time_slices
