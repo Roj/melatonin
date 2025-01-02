@@ -302,7 +302,7 @@ class Detector:
                 mic_fft_slices[((i + 1) % self.parameters.num_mics)][t][omega_index]
             )
 
-            phase_cross_spectrum = cross_power / np.conj(cross_power)
+            phase_cross_spectrum = cross_power / np.abs(cross_power)
             value += phase_cross_spectrum * phase_rotation_factor
         return -np.abs(value)
 
