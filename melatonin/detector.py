@@ -60,6 +60,41 @@ class Parameters:
         )
 
 
+def overlapping_slices(
+    slice_size: int, overlap_size: int, max_value: int
+) -> tuple[int, int]:
+    """Generate windows of slice_size guaranteeing overlap.
+
+    Generates the following slices:
+    0: [0, slice_size]
+    1: [slice_size - overlap_size, 2*slice_size - overlap_size]
+    2: [2*slice_size - 2*overlap_size, 3*slice_size - 2*overlap_size]
+    This way each chunk is of slice_size length, but there is overlap_size
+    shared between successive chunks
+
+    Parameters
+    ----------
+    slice_size : int
+        Size of each chunk.
+    overlap_size : int
+        Overlap between a chunk and the previous one.
+    max_value : int
+        Maximum value of the chunk stop.
+
+    Yields
+    -------
+    tuple[int, int]
+        Start and stop of current chunk.
+    """
+
+    start, stop = 0, slice_size
+
+    while stop < max_value:
+        yield start, stop
+        start += slice_size - overlap_size
+        stop = start + slice_size
+
+
 class Detector:
     def __init__(self, parameters: Parameters, mic_signals):
         self.parameters = parameters
@@ -70,17 +105,10 @@ class Detector:
         self.mic_time_slices = []
         for mic_i, signal in enumerate(self.mic_signals):
             self.mic_time_slices.append(list())
-            start, stop = 0, self.parameters.slice_size
-            # Generate windows of the following form:
-            # 0: [0, slice_size]
-            # 1: [slice_size - overlap_size, 2*slice_size - overlap_size]
-            # 2: [2*slice_size - 2*overlap_size, 3*slice_size - 2*overlap_size]
-            # This way each chunk is of slice_size length, but there is overlap_size
-            # shared between successive chunks
-            while stop < len(signal):
+            for start, stop in overlapping_slices(
+                self.parameters.slice_size, self.parameters.overlap_size, len(signal)
+            ):
                 self.mic_time_slices[mic_i].append(signal[start:stop])
-                start += self.parameters.slice_size - self.parameters.overlap_size
-                stop = start + self.parameters.slice_size
 
         self.mic_fft_slices = [
             [scipy.fft.rfft(_slice) for _slice in slices]
