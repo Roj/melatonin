@@ -5,11 +5,15 @@ description = "Implementation of sound source detection for urban sound pollutio
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "acoular>=24.10",
     "matplotlib>=3.10.0",
+    "pandas>=2.2.3",
     "pyaudio>=0.2.14",
+    "pyroomacoustics>=0.8.3",
     "rich>=13.9.4",
     "ruff>=0.8.5",
     "scipy>=1.14.1",
+    "tqdm>=4.67.1",
 ]
 
 [dependency-groups]
