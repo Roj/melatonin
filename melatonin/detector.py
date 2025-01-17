@@ -124,7 +124,7 @@ class Detector:
         )
         if self.parameters.verbose:
             log.info(
-                f"Single source analysis zone is {self.freq_bins[self.parameters.adjacent_zone+1] - self.freq_bins[1]:.2f}Hz"
+                f"Single source analysis zone is {self.freq_bins[self.parameters.adjacent_zone] - self.freq_bins[1]:.2f}Hz"
             )
 
         # Choosing the important frequencies
@@ -138,7 +138,7 @@ class Detector:
 
                 top_frequency_indices = self.d_highest_peaks(
                     zone * self.parameters.adjacent_zone,
-                    (zone + 1) * self.parameters.adjacent_zone,
+                    (zone + 1) * self.parameters.adjacent_zone - 1,
                     timestep=t,
                     d=self.parameters.estimations_per_zone,  # TODO: move this to function?
                     mic_fft_slices=self.mic_fft_slices,
@@ -148,7 +148,7 @@ class Detector:
                     # TODO: checkme - to avoid spurious DoA estimations
                     if np.abs(self.mic_fft_slices[1][t][frequency_index]) < 100:
                         continue
-                    logging.debug(
+                    logging.info(
                         f"Using frequency {self.freq_bins[frequency_index]} in zone #{zone}"
                     )
                     self.frequencies_of_interest.append(self.freq_bins[frequency_index])
@@ -161,6 +161,10 @@ class Detector:
                         method="bounded",
                         bounds=(0, 2 * np.pi),
                         args=(frequency_index, t, self.mic_fft_slices, self.freq_bins),
+                    )
+                    logging.info(
+                        f"Frequency {self.freq_bins[frequency_index]} in zone #{zone}"
+                        f" is voting for angle {np.rad2deg(result.x)}deg"
                     )
                     self.doa_zone_estimations.append(result.x)
 
@@ -207,7 +211,7 @@ class Detector:
                     * np.conj(mic_fft_slices[next_mic][timestep][freq])
                 )
             magnitudes[freq] = val
-        return sorted(magnitudes, key=magnitudes.__getitem__)[-2:]
+        return sorted(magnitudes, key=magnitudes.__getitem__)[-d:]
 
     def correlation(self, mic1, mic2, timestep, f_from, f_to, mic_fft_slices):
         return np.linalg.norm(
@@ -216,7 +220,7 @@ class Detector:
             ord=1,
         )
 
-    def cross_correlation(
+    def correlation_coefficient(
         self,
         mic1: int,
         mic2: int,
@@ -229,7 +233,7 @@ class Detector:
         corr = self.correlation(mic1, mic2, timestep, f_from, f_to, mic_fft_slices)
 
         # Correlation coefficient
-        correlation_coefficient = corr / np.sqrt(
+        coeff = corr / np.sqrt(
             self.correlation(
                 mic1,
                 mic1,
@@ -247,24 +251,23 @@ class Detector:
                 mic_fft_slices=mic_fft_slices,
             )
         )
-        return correlation_coefficient
+        return coeff
 
     def is_single_source_zone(
         self, zone_index: int, timestep: int, mic_fft_slices: list
-    ):
+    ) -> bool:
         avg = 0
         omega_index = self.parameters.adjacent_zone * zone_index
         for i in range(1, self.parameters.num_mics):
             next_mic = (i + 1) % self.parameters.num_mics
             avg += (
-                1
-                / self.parameters.num_mics
-                * self.cross_correlation(
+                (1 / self.parameters.num_mics)
+                * self.correlation_coefficient(
                     i,
                     next_mic,
                     timestep,
                     omega_index,
-                    omega_index + self.parameters.adjacent_zone,
+                    omega_index + self.parameters.adjacent_zone - 1,
                     mic_fft_slices,
                 )
             )
@@ -282,12 +285,11 @@ class Detector:
         value = 0
         omega = freq_bins[omega_index]
         for i in range(self.parameters.num_mics):
-            # +1 because we use zero-index; eqn uses -1
+            # +1 because we use zero-index; eqn uses 1-index
             phase_rotation_factor = np.exp(
                 -1j
                 * omega
-                * self.parameters.distance_to_next_mic
-                / self.parameters.speed_of_sound
+                * (self.parameters.distance_to_next_mic / self.parameters.speed_of_sound)
                 * (
                     np.sin(self.parameters.A_prime - phi)
                     - np.sin(
@@ -313,7 +315,7 @@ class Detector:
             f"Histogram of DoA estimations\nusing {self.parameters.estimations_per_zone} frequency components"
         )
 
-        bins, x, _ = plt.hist(
+        plt.hist(
             np.array(self.doa_zone_estimations) * 360 / (2 * np.pi),
             bins=np.linspace(0, 360, self.parameters.histogram_bins + 1),
         )
