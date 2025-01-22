@@ -1,3 +1,4 @@
+"Sound detection using PyRoomAcoustics (PRA)"
 from dataclasses import dataclass
 import logging
 
@@ -6,32 +7,26 @@ import numpy as np
 import pyroomacoustics as pra
 from rich.logging import RichHandler
 
+from melatonin.parameters import CommonParameters
+
 
 FORMAT = "%(message)s"
 logging.basicConfig(
     level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler()]
 )
-
 log = logging.getLogger("pra")
 
 
 @dataclass
-class Parameters:
+class PRAParameters:
+    parameters: CommonParameters
     n_sources: int
     distance: float
     dim: int
     room_dim: np.ndarray
     SNR: float
-    speed_of_sound: float
-    sampling_frequency: int
-    nfft: int
     freq_bins: np.ndarray
-    microphone_positions: np.ndarray
-
-    @property
-    def sigma2(self):
-        return 10 ** (-self.SNR / 10) / (4.0 * np.pi * self.distance) ** 2
-
+    
 
 def get_microphone_signals(
     source_azimuths: np.ndarray, source_signals: np.ndarray, parameters: Parameters
@@ -69,7 +64,7 @@ def run_algorithms(
 
     X = np.array(
         [
-            pra.transform.stft.analysis(signal, parameters.nfft, parameters.nfft // 2).T
+            pra.transform.stft.analysis(signal, parameters.slice_size, parameters.slice_size // 2).T
             for signal in microphone_signals
         ]
     )
@@ -78,7 +73,7 @@ def run_algorithms(
         doa = pra.doa.algorithms[algo_name](
             parameters.microphone_positions,
             parameters.sampling_frequency,
-            parameters.nfft,
+            parameters.slice_size,
             c=parameters.speed_of_sound,
             num_src=len(azimuths),
         )
@@ -145,7 +140,7 @@ if __name__ == "__main__":
         SNR=0.0,
         speed_of_sound=343.0,
         sampling_frequency=16_000,
-        nfft=256,
+        slice_size=256,
         freq_bins=np.arange(5, 60),
         # We use a circular array with radius 15 cm # and 12 microphones
         microphone_positions=pra.circular_2D_array(room_dim / 2, 12, 0.0, 0.15),

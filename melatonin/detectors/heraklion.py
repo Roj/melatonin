@@ -1,37 +1,32 @@
+"""Implementation of https://hal.science/hal-01367320v1 """
 from dataclasses import dataclass
+import logging
 import typing
+
 import scipy.fft
 import numpy as np
 import scipy
 from matplotlib import pyplot as plt
-import logging
+
 from rich.logging import RichHandler
+from melatonin.parameters import CommonParameters
 
 FORMAT = "%(message)s"
 logging.basicConfig(
     level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler()]
 )
-
 log = logging.getLogger("detector")
 
 
 @dataclass
-class Parameters:
-    microphone_positions: np.ndarray
-    slice_size: int = 2048
-    sampling_frequency: int = 44100
+class HeraklionParameters:
+    parameters: CommonParameters
     adjacent_zone: int = 2
-    single_source_threshold: float = 0.8
-    speed_of_sound: int = 1
+    single_source_threshold: float = 0.8    
     estimations_per_zone: int = 4  # aka "D" in the paper
     histogram_bins: int = 50  # aka "L" in the paper
     Q0: int = 5  # blackman window peak
     max_sources: int = 10
-    verbose: bool = False
-
-    @property
-    def overlap_size(self):
-        return self.slice_size // 2
 
     @property
     def Q(self):
@@ -60,61 +55,11 @@ class Parameters:
         )
 
 
-def overlapping_slices(
-    slice_size: int, overlap_size: int, max_value: int
-) -> tuple[int, int]:
-    """Generate windows of slice_size guaranteeing overlap.
-
-    Generates the following slices:
-    0: [0, slice_size]
-    1: [slice_size - overlap_size, 2*slice_size - overlap_size]
-    2: [2*slice_size - 2*overlap_size, 3*slice_size - 2*overlap_size]
-    This way each chunk is of slice_size length, but there is overlap_size
-    shared between successive chunks
-
-    Parameters
-    ----------
-    slice_size : int
-        Size of each chunk.
-    overlap_size : int
-        Overlap between a chunk and the previous one.
-    max_value : int
-        Maximum value of the chunk stop.
-
-    Yields
-    -------
-    tuple[int, int]
-        Start and stop of current chunk.
-    """
-
-    start, stop = 0, slice_size
-
-    while stop < max_value:
-        yield start, stop
-        start += slice_size - overlap_size
-        stop = start + slice_size
-
-
 class Detector:
-    def __init__(self, parameters: Parameters, mic_signals):
+    def __init__(self, parameters: Parameters):
         self.parameters = parameters
-        self.mic_signals = mic_signals
-        self.mic_time_slices = []
 
-    def detect(self, t_from: int, t_to: int):
-        self.mic_time_slices = []
-        for mic_i, signal in enumerate(self.mic_signals):
-            self.mic_time_slices.append(list())
-            for start, stop in overlapping_slices(
-                self.parameters.slice_size, self.parameters.overlap_size, len(signal)
-            ):
-                self.mic_time_slices[mic_i].append(signal[start:stop])
-
-        self.mic_fft_slices = [
-            [scipy.fft.rfft(_slice) for _slice in slices]
-            for slices in self.mic_time_slices
-        ]
-
+    def detect(self, microphone_fft_slices):
         # We then define a “constant-time analysis zone”, (t, Ω), as a
         # series of frequency-adjacent TF points (t, ω). A “constant-time
         # analysis zone”, (t, Ω) is thus referred to a specific time frame t
@@ -131,9 +76,9 @@ class Detector:
         # The paper selects w_i_max for each microphone pair for each single source zone.
         self.doa_zone_estimations = []
         self.frequencies_of_interest = []
-        for t in range(t_from, t_to):
+        for t in range(len(microphone_fft_slices)):
             for zone in range(50):
-                if not self.is_single_source_zone(zone, t, self.mic_fft_slices):
+                if not self.is_single_source_zone(zone, t, microphone_fft_slices):
                     continue
 
                 top_frequency_indices = self.d_highest_peaks(
@@ -141,28 +86,28 @@ class Detector:
                     (zone + 1) * self.parameters.adjacent_zone - 1,
                     timestep=t,
                     d=self.parameters.estimations_per_zone,  # TODO: move this to function?
-                    mic_fft_slices=self.mic_fft_slices,
+                    mic_fft_slices=microphone_fft_slices,
                 )
 
                 for frequency_index in top_frequency_indices:
                     # TODO: checkme - to avoid spurious DoA estimations
-                    if np.abs(self.mic_fft_slices[1][t][frequency_index]) < 100:
+                    if np.abs(microphone_fft_slices[1][t][frequency_index]) < 100:
                         continue
-                    logging.info(
+                    log.info(
                         f"Using frequency {self.freq_bins[frequency_index]} in zone #{zone}"
                     )
                     self.frequencies_of_interest.append(self.freq_bins[frequency_index])
-                    logging.debug(
-                        f"Value: {np.abs(self.mic_fft_slices[1][t][frequency_index])}"
+                    log.debug(
+                        f"Value: {np.abs(microphone_fft_slices[1][t][frequency_index])}"
                     )
                     # for single source zone, detect DoA
                     result = scipy.optimize.minimize_scalar(
                         self.negative_cics,
                         method="bounded",
                         bounds=(0, 2 * np.pi),
-                        args=(frequency_index, t, self.mic_fft_slices, self.freq_bins),
+                        args=(frequency_index, t, microphone_fft_slices, self.freq_bins),
                     )
-                    logging.info(
+                    log.info(
                         f"Frequency {self.freq_bins[frequency_index]} in zone #{zone}"
                         f" is voting for angle {np.rad2deg(result.x)}deg"
                     )
