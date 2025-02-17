@@ -51,7 +51,7 @@ class SignalGenerator:
     """Helper class to create source signals"""
     @staticmethod
     def sawtooths(n_sources: int, sampling_frequency: int, duration: int) -> list[np.ndarray]:
-        t = np.linspace(0, 1, num=int(sampling_frequency * duration))
+        t = np.linspace(0, duration, num=int(sampling_frequency * duration))
         return np.array(
             [
                 (scipy.signal.sawtooth(t * j * 400 * 2 * np.pi)).astype(np.float32)
