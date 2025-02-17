@@ -13,6 +13,7 @@ logging.basicConfig(
 log = logging.getLogger("detector")
 
 
+
 class PositionGenerator: 
     """Helper class to create source configurations"""
     @staticmethod
@@ -24,6 +25,10 @@ class PositionGenerator:
         doas = PositionGenerator.sources_uniform_doas(num)
         return np.stack([np.cos(doas), np.sin(doas)], axis=1)*amplitude
 
+    @staticmethod 
+    def sources_on_circle(num, distance, offset):
+        doas = PositionGenerator.sources_uniform_doas(num)
+        return np.stack([np.cos(doas), np.sin(doas)], axis=1)*distance + offset
     @staticmethod
     def fixed_spread_doas(num, spread_deg):
         # First offset can be at most at the spread angle
@@ -37,6 +42,10 @@ class PositionGenerator:
     def fixed_spread(num: int, spread_deg: int, amplitude: float=6):
         doas = PositionGenerator.fixed_spread_doas(num, spread_deg)
         return np.stack([np.cos(doas), np.sin(doas)], axis=1)*amplitude
+
+    @staticmethod
+    def doas_to_positions(doas: np.ndarray, amplitudes: np.ndarray) -> np.ndarray:
+        return (np.stack([np.cos(doas), np.sin(doas)], axis=1).T*amplitudes).T
 
 class SignalGenerator:
     """Helper class to create source signals"""
