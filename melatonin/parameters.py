@@ -1,7 +1,7 @@
 import numpy as np 
 from dataclasses import dataclass
 
-@dataclass
+@dataclass(kw_only=True)
 class CommonParameters:
     microphone_positions: np.ndarray
     slice_size: int = 2048

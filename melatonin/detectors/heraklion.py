@@ -18,9 +18,8 @@ logging.basicConfig(
 log = logging.getLogger("detector")
 
 
-@dataclass
-class HeraklionParameters:
-    parameters: CommonParameters
+@dataclass(kw_only=True)
+class HeraklionParameters(CommonParameters):
     adjacent_zone: int = 2
     single_source_threshold: float = 0.8    
     estimations_per_zone: int = 4  # aka "D" in the paper
@@ -55,11 +54,11 @@ class HeraklionParameters:
         )
 
 
-class Detector:
-    def __init__(self, parameters: Parameters):
-        self.parameters = parameters
+class HeraklionDetector:
+    def __init__(self, name: str, parameters: HeraklionParameters):
+        super(self).__init__(name, parameters)
 
-    def detect(self, microphone_fft_slices):
+    def detect(self, microphone_fft_slices) -> np.ndarray:
         # We then define a “constant-time analysis zone”, (t, Ω), as a
         # series of frequency-adjacent TF points (t, ω). A “constant-time
         # analysis zone”, (t, Ω) is thus referred to a specific time frame t
@@ -144,6 +143,8 @@ class Detector:
             self.atoms.append(position)
             self.atom_energies.append(atom_energy)
             self.atom_contributions.append(atom_contribution)
+        
+        return np.deg2rad(self.x[self.atoms])
 
     def d_highest_peaks(self, freq_from, freq_to, timestep, d, mic_fft_slices):
         magnitudes = {}
