@@ -9,6 +9,7 @@ import scipy
 from matplotlib import pyplot as plt
 
 from rich.logging import RichHandler
+from melatonin.detectors.base import BaseDetector
 from melatonin.parameters import CommonParameters
 
 FORMAT = "%(message)s"
@@ -54,9 +55,9 @@ class HeraklionParameters(CommonParameters):
         )
 
 
-class HeraklionDetector:
+class HeraklionDetector(BaseDetector):
     def __init__(self, name: str, parameters: HeraklionParameters):
-        super(self).__init__(name, parameters)
+        super().__init__(name, parameters)
 
     def detect(self, microphone_fft_slices) -> np.ndarray:
         # We then define a “constant-time analysis zone”, (t, Ω), as a

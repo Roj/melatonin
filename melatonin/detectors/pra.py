@@ -5,6 +5,7 @@ import typing
 
 import scipy.signal
 import numpy as np
+from melatonin.detectors.base import BaseDetector
 from melatonin.microphones import AnechoicRoomMicrophones
 import pyroomacoustics as pra
 from rich.logging import RichHandler
@@ -25,14 +26,12 @@ class PRAParameters(CommonParameters):
     distance: float
     dim: int
     room_dim: np.ndarray
-    SNR: float
     freq_bins: np.ndarray
-    algorithm: typing.Literal["SPR", "MUSIC", "NormMUSIC", "CSSM"]
+    algorithm: typing.Literal["SRP", "MUSIC", "NormMUSIC", "CSSM"]
 
-class PRADetector:
+class PRADetector(BaseDetector):
     def __init__(self, name: str, parameters: PRAParameters):
-        self.name = name
-        self.parameters = parameters 
+        super().__init__(name, parameters)
         self.doa = None
 
     def detect(self, microphones_fft_slices):
@@ -63,8 +62,7 @@ if __name__ == "__main__":
         n_sources=3,
         distance=3.0,
         dim=2,
-        room_dim=room_dim,
-        SNR=0.0,        
+        room_dim=room_dim, 
         freq_bins=np.arange(5, 60),
         
         
