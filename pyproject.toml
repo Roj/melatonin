@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "acoular>=24.10",
     "matplotlib>=3.10.0",
+    "mypy>=1.14.1",
     "pandas>=2.2.3",
     "pyaudio>=0.2.14",
     "pyroomacoustics>=0.8.3",

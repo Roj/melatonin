@@ -592,6 +592,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "acoular" },
     { name = "matplotlib" },
+    { name = "mypy" },
     { name = "pandas" },
     { name = "pyaudio" },
     { name = "pyroomacoustics" },
@@ -612,6 +613,7 @@ dev = [
 requires-dist = [
     { name = "acoular", specifier = ">=24.10" },
     { name = "matplotlib", specifier = ">=3.10.0" },
+    { name = "mypy", specifier = ">=1.14.1" },
     { name = "pandas", specifier = ">=2.2.3" },
     { name = "pyaudio", specifier = ">=0.2.14" },
     { name = "pyroomacoustics", specifier = ">=0.8.3" },
