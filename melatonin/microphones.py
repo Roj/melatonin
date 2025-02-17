@@ -59,7 +59,6 @@ class CustomMicrophoneArray(MicrophoneArray):
         source_locations: np.ndarray, 
         source_signals: np.ndarray, 
         parameters: CommonParameters, 
-        noise_level: float, 
         verbose=True
     ):
         """0.01 noise amplitude against 0.99 signal is ~40dB SNR"""
@@ -73,7 +72,7 @@ class CustomMicrophoneArray(MicrophoneArray):
         mic_signals = []
         signal_length = len(source_signals[0])
         for mic_i in range(n_mics):
-            mic_signal = np.random.randn(signal_length)*noise_level
+            mic_signal = np.random.randn(signal_length)*parameters.noise_level
             for source_j in range(len(source_locations)):
                 delay = distances[mic_i, source_j]/parameters.speed_of_sound
                 start = int(parameters.sampling_frequency * delay)
@@ -81,7 +80,7 @@ class CustomMicrophoneArray(MicrophoneArray):
                 if verbose:
                     print(f"Delay for source {source_j} to microphone {mic_i} is {delay:.4f}; attn {attenuation:.2f}")
                 mic_signal[start:] += attenuation * source_signals[source_j][:signal_length - start]
-            mic_signal += np.random.randn(signal_length)*noise_level
+            mic_signal += np.random.randn(signal_length)*parameters.noise_level
             mic_signals.append(mic_signal)
         return mic_signals
     
@@ -115,7 +114,6 @@ class AnechoicRoomMicrophones(MicrophoneArray):
     def get_microphone_signals(
         source_locations: np.ndarray, 
         source_signals: np.ndarray, 
-        noise_level: float,
         parameters: CommonParameters
     ):
         """Generating microphone signals by simulating an anechoic room"""
@@ -123,7 +121,7 @@ class AnechoicRoomMicrophones(MicrophoneArray):
         aroom = pra.AnechoicRoom(
             2,
             fs=parameters.sampling_frequency,
-            sigma2_awgn=noise_level,
+            sigma2_awgn=parameters.noise_level,
         )
         aroom.add_microphone_array(
             pra.MicrophoneArray(parameters.microphone_positions, fs=aroom.fs)
