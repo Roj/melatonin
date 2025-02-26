@@ -9,7 +9,6 @@ class MicrophoneArray:
     def get_microphone_signals(
         source_locations: np.ndarray, 
         source_signals: np.ndarray, 
-        noise_level: float,
         parameters: CommonParameters
     ):
         raise NotImplementedError
@@ -55,7 +54,7 @@ class CustomMicrophoneArray(MicrophoneArray):
             stop = start + slice_size
 
     @staticmethod
-    def generate_mic_signals(
+    def get_microphone_signals(
         source_locations: np.ndarray, 
         source_signals: np.ndarray, 
         parameters: CommonParameters, 
@@ -82,7 +81,7 @@ class CustomMicrophoneArray(MicrophoneArray):
                 mic_signal[start:] += attenuation * source_signals[source_j][:signal_length - start]
             mic_signal += np.random.randn(signal_length)*parameters.noise_level
             mic_signals.append(mic_signal)
-        return mic_signals
+        return np.array(mic_signals)
     
     @staticmethod
     def build_fft_slices(mic_signals, parameters: CommonParameters):
@@ -104,7 +103,7 @@ class AnechoicRoomMicrophones(MicrophoneArray):
     @staticmethod 
     def get_positions(room_dim: np.ndarray, number: int):
         # TODO: parametrize the rest?? / proxy function
-        return pra.circular_2D_array(room_dim / 2, number, 0.0, 0.15)
+        return pra.circular_2D_array(np.zeros(2), number, 0.0, 0.15).T
 
     @staticmethod
     def calculate_noise_level(distance, SNR):
@@ -124,11 +123,11 @@ class AnechoicRoomMicrophones(MicrophoneArray):
             sigma2_awgn=parameters.noise_level,
         )
         aroom.add_microphone_array(
-            pra.MicrophoneArray(parameters.microphone_positions, fs=aroom.fs)
+            pra.MicrophoneArray(parameters.microphone_positions.T, fs=aroom.fs)
         )
         
         for signal_i in range(len(source_locations)):
-            location, signal = source_locations[signal_i], source_signals[:, signal_i]
+            location, signal = source_locations[signal_i], source_signals[signal_i, :]
             aroom.add_source(location, signal=signal)
 
         aroom.simulate()
@@ -137,9 +136,11 @@ class AnechoicRoomMicrophones(MicrophoneArray):
     @staticmethod
     def build_fft_slices(mic_signals: np.ndarray, parameters: CommonParameters):
         """FFT slices using PRA's Short Time FT"""
-        return np.array(
+        mic_freq_timestep = np.array(
             [
                 pra.transform.stft.analysis(signal, parameters.slice_size, parameters.overlap_size).T
                 for signal in mic_signals
             ]
         )
+        # Move from [mic, fft_freq, timestep, ] to [mic, timestep, fft_freq]
+        return np.moveaxis(mic_freq_timestep, 2, 1)

@@ -35,8 +35,10 @@ class PRADetector(BaseDetector):
         self.doa = None
 
     def detect(self, microphones_fft_slices):
+        # Move from [mic, timestep, fft_freq] to [mic, fft_freq, timestep]
+        microphones_fft_slices = np.moveaxis(microphones_fft_slices, 2, 1)
         self.doa = pra.doa.algorithms[self.parameters.algorithm](
-            self.parameters.microphone_positions,
+            self.parameters.microphone_positions.T,
             self.parameters.sampling_frequency,
             self.parameters.slice_size,
             c=self.parameters.speed_of_sound,
