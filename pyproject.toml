@@ -1,5 +1,6 @@
 [project]
 name = "melatonin"
+packages="melatonin"
 version = "0.1.0"
 description = "Implementation of sound source detection for urban sound pollution monitoring at night."
 readme = "README.md"
