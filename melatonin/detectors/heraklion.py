@@ -90,8 +90,8 @@ class HeraklionDetector(BaseDetector):
                 )
 
                 for frequency_index in top_frequency_indices:
-                    # TODO: checkme - to avoid spurious DoA estimations
-                    if np.abs(microphone_fft_slices[1][t][frequency_index]) < 100:
+                    # TODO: checkme - to avoid spurious DoA estimations # TODO: checkmeagain, why 1??
+                    if np.abs(microphone_fft_slices[1][t][frequency_index]) < 1:
                         continue
                     log.info(
                         f"Using frequency {self.freq_bins[frequency_index]} in zone #{zone}"
